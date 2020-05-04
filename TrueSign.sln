@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29519.161
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TrueSign.Shared", "TrueSign.Shared\TrueSign.Shared.csproj", "{7B1250DF-1308-4B73-A218-77F1B78C588A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConnectionExample", "ConnectionExample\ConnectionExample.csproj", "{05B7ACC4-0BA6-411B-B798-17585D1DB0E7}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "OnBase", "OnBase", "{9A9D69E2-B3B7-439C-98D0-C3BD11E2E146}"
+	ProjectSection(SolutionItems) = preProject
+		TrueSignLibrary.cs = TrueSignLibrary.cs
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7B1250DF-1308-4B73-A218-77F1B78C588A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B1250DF-1308-4B73-A218-77F1B78C588A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B1250DF-1308-4B73-A218-77F1B78C588A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B1250DF-1308-4B73-A218-77F1B78C588A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{05B7ACC4-0BA6-411B-B798-17585D1DB0E7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{05B7ACC4-0BA6-411B-B798-17585D1DB0E7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{05B7ACC4-0BA6-411B-B798-17585D1DB0E7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{05B7ACC4-0BA6-411B-B798-17585D1DB0E7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {EC903F25-8F14-4FA7-BB6A-0B15A9CD25B9}
+	EndGlobalSection
+EndGlobal

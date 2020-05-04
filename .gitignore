@@ -3,3 +3,5 @@
 ################################################################################
 
 /.vs/TrueSign
+/ConnectionExample/obj/Debug
+/TrueSign.Shared/obj
