@@ -5,3 +5,9 @@
 /.vs/TrueSign
 /ConnectionExample/obj/Debug
 /TrueSign.Shared/obj
+/packages
+/.vs
+/ConnectionExample/bin/Debug
+/Tester/obj
+/UpgradeLog.htm
+/Backup

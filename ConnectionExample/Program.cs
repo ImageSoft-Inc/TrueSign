@@ -8,18 +8,20 @@ namespace ConnectionExample
     {
         static async Task Main(string[] args)
         {
-            using(ApiClient api = new ApiClient("6f943f3a-3310-4487-a098-8774ea6e7352", "57nKSHNdA3UEX7boV4ZXnjPYMfl+gf2ai6zP+SG3"))
+            using(ApiClient trueSign = new ApiClient("<<Enter Client ID>>", "<<Enter Client Secret>>"))
             {
                 Console.WriteLine("API Token:");
-                Console.WriteLine(api._ApiToken.Token);
+                Console.WriteLine(trueSign._ApiToken.Token);
 
                 Console.WriteLine();
+                Console.WriteLine("--------------------------------------------------------------------------");
                 Console.WriteLine("Expires (UTC):");
-                Console.WriteLine(api._ApiToken.Expires_UTC);
+                Console.WriteLine(trueSign._ApiToken.Expires_UTC);
 
                 Console.WriteLine();
-                Console.WriteLine("Users with envelope access:");
-                var users = await api.GetUsers();
+                Console.WriteLine("--------------------------------------------------------------------------");
+                Console.WriteLine("Users with access to the authenticated envelope type:");
+                var users = await trueSign.GetUsers();
                 foreach (var user in users)
                 {
 
