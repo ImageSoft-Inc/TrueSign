@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using TrueSign.Shared;
 
-namespace ConnectionExample
+namespace ConsoleApp
 {
     class Program
     {
