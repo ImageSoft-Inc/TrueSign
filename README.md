@@ -1,37 +1,14 @@
-## Welcome to GitHub Pages
+# Welcome to TrueSign
 
-You can use the [editor on GitHub](https://github.com/ImageSoft-Inc/TrueSign/edit/master/README.md) to maintain and preview the content for your website in Markdown files.
+TrueSign® is a web application that allows individuals and organizations sign and stamp documents electronically. This public repository is meant to help organizations integrate TrueSign with their business applications. To learn more about TrueSign, click [here](https://truesign.com). If you would like to try a live demo, please click [here](https://truesign.com/demo).
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+It is important that you also visit out API page at [api.truesign.com](https://api.truesign.com) to read more about our REST API and fully understand our code samples.
 
-### Markdown
+## About TrueSign.Shared
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+ImageSoft has published a NuGet package, called [TrueSign.Shared](https://www.nuget.org/packages/truesign.shared), that allows you to quickly integrate with TrueSign from a .Net Framework or C++ application. TrueSign.Shared contains a library with the core logic to communicate with the TrueSign API. This package will be updated as the API changes. For more information, please visit the NuGet page for this package.
 
-```markdown
-Syntax highlighted code block
 
-# Header 1
-## Header 2
-### Header 3
+## Support or Contact
 
-- Bulleted
-- List
-
-1. Numbered
-2. List
-
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
-```
-
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/ImageSoft-Inc/TrueSign/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
+Having trouble integrating with the TrueSign API? Check out our [documentation](https://api.truesign.com/docs/) or [contact support](https://www.imagesoftinc.com/support.html) and we’ll help you sort it out.
