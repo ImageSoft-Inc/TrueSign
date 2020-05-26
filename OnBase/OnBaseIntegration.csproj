@@ -8,6 +8,7 @@
     <ProjectGuid>{44E69993-BD7F-4224-8A00-D3C355661919}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="TrueSignDownload.cs" />
     <Compile Include="TrueSignLibrary.cs" />
     <Compile Include="TrueSignUpload.cs" />
   </ItemGroup>

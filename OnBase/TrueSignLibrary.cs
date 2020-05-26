@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace TrueSignNextLibrary
+﻿namespace TrueSignNextLibrary
 {
     using System;
     using System.Text;
@@ -435,7 +433,7 @@ namespace TrueSignNextLibrary
         /// </summary>
         /// <param name="id">The envelope ID</param>
         /// <returns>true/false</returns>
-        public bool CloseEnvelope(Guid id)
+        public bool SendEnvelope(Guid id)
         {
             try
             {
@@ -447,7 +445,7 @@ namespace TrueSignNextLibrary
                     Authenticate();
 
                 //Call the close endpoint of the API
-                var response = _Http_Client.GetAsync(string.Format("envelope/{0}/close", id)).Result;
+                var response = _Http_Client.GetAsync(string.Format("envelope/{0}/send", id)).Result;
                 _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, response.Content.ReadAsStringAsync().Result);
 
                 //Ensure the call did not error out. If it did error out, then this will throw an exception.
@@ -701,23 +699,51 @@ namespace TrueSignNextLibrary
                             KeywordType stampedKeywordType = _App.Core.KeywordTypes.Find(stampedKeywordName);
                             if (signedKeywordType != null)
                             {
-                                Keyword keyword = signedKeywordType.CreateKeyword(doc.Signed.ToString());
+                                //Create keyword with value True/False
+                                Keyword newKeyword = signedKeywordType.CreateKeyword(doc.Signed.ToString());
 
-                                // Add the keyword to the keyword modifier
-                                keyModifier.AddKeyword(keyword);
+                                //Check if the document contains a Signed keyword type
+                                var keyRec = newDocument.KeywordRecords.Find(signedKeywordType);
+                                if (keyRec != null)
+                                {
+                                    //Retrieve keyword to update
+                                    foreach (Keyword keyword in keyRec.Keywords.FindAll(signedKeywordType))
+                                    {
+                                        //Update the keyword in the keyword modifier object
+                                        keyModifier.UpdateKeyword(keyword, newKeyword);
+                                    }
+                                }
+                                else
+                                    keyModifier.AddKeyword(newKeyword);
+
                             }
                             else
-                                _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("There was no keyword found with the name: {0}", signedKeywordName));
+                                _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("There was no keyword type found with name: {0}", signedKeywordName));
 
                             if (stampedKeywordType != null)
                             {
-                                Keyword keyword = stampedKeywordType.CreateKeyword(doc.Stamped.ToString());
+                                //Create keyword with value True/False
+                                Keyword newKeyword = stampedKeywordType.CreateKeyword(doc.Stamped.ToString());
 
-                                // Add the keyword to the keyword modifier
-                                keyModifier.AddKeyword(keyword);
+                                //Check if the document contains a Stamped keyword type
+                                var keyRec = newDocument.KeywordRecords.Find(stampedKeywordType);
+                                if (keyRec != null)
+                                {
+                                    //Retrieve keyword to update
+                                    foreach (Keyword keyword in keyRec.Keywords.FindAll(stampedKeywordType))
+                                    {
+                                        //Update the keyword in the keyword modifier object
+                                        keyModifier.UpdateKeyword(keyword, newKeyword);
+                                    }
+                                }
+                                else
+                                    keyModifier.AddKeyword(newKeyword);
                             }
                             else
-                                _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("There was no keyword found with the name: {0}", stampedKeywordName));
+                                _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("There was no keyword type found with name: {0}", stampedKeywordName));
+
+                            //Apply keyword changes
+                            keyModifier.ApplyChanges();
 
                             _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Successfully created a new OnBase revision for document with ID: {0}. Deleting temp file...", doc.Client_Id));
 
@@ -728,11 +754,16 @@ namespace TrueSignNextLibrary
                             var waitingQ = _App.Workflow.Queues.Find(x => x.Name == "Waiting" && x.LifeCycle.Name == "TrueSign Next");
                             if (waitingQ != null)
                             {
-
                                 var doneQ = _App.Workflow.Queues.Find(x => x.Name == "Done" && x.LifeCycle.Name == "TrueSign Next");
                                 if (doneQ != null)
                                 {
-                                    waitingQ.TransitionDocument(doneQ, document);
+                                    try
+                                    {
+                                        //Try to transition doc - empty catch because the doc might not be in the queue
+                                        waitingQ.TransitionDocument(doneQ, document);
+                                    }
+                                    catch { }
+
                                     _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Successfully transitioned document with ID: {0} to the Done queue.", document.ID));
                                 }
                             }
