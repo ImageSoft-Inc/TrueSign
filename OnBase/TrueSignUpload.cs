@@ -25,8 +25,8 @@
             try
             {
                 Guid Envelope_Id = Guid.Empty;
-                string propEnvId = "", title = "", email = "", first = "", last = "", codeDesc = "", codeVal = "";
-                bool external = false;
+                string propEnvId = "", title = "", email = "", first = "", last = "", codeDesc = "", codeVal = "", notifySigner = "";
+                bool external = false, notify = true;
 
                 //Initiate a new TrueSign object. The clint API creds must have been set
                 //on Session Property bags before the script was called.
@@ -38,11 +38,11 @@
                 if (!args.SessionPropertyBag.TryGetValue("TrueSignEnvelopeId", out propEnvId))
                 {
                     //You are here because this is a new envelope. Get the title set in a prop bag
-                    args.SessionPropertyBag.TryGetValue("TrueSignTitle", out title);
+                    args.SessionPropertyBag.TryGetValue("TrueSignEnvelopeTitle", out title);
 
                     //If the title was empty, we will set a default one
                     if (string.IsNullOrEmpty(title))
-                        title = "OnBase Sync Envelope " + DateTime.Now.ToString("hh:mm");
+                        title = "OnBase Envelope " + DateTime.Now.ToString("hh:mm");
 
                     //Create a contact object that will be on external envelopes. 
                     //This info will appear on the email sent to the required signer. NOT REQUIRED
@@ -80,9 +80,9 @@
                 if (args.BatchDocumentsRemaining == 0)
                 {
                     //Get all the signer info from prop bags
-                    args.SessionPropertyBag.TryGetValue("TrueSignEmail", out email);
-                    args.SessionPropertyBag.TryGetValue("TrueSignFirst", out first);
-                    args.SessionPropertyBag.TryGetValue("TrueSignLast", out last);
+                    args.SessionPropertyBag.TryGetValue("TrueSignSignerEmail", out email);
+                    args.SessionPropertyBag.TryGetValue("TrueSignFirstName", out first);
+                    args.SessionPropertyBag.TryGetValue("TrueSignLastName", out last);
                     args.SessionPropertyBag.TryGetValue("TrueSignExternal", out external);
                     args.SessionPropertyBag.TryGetValue("TrueSignCodeDesc", out codeDesc);
                     args.SessionPropertyBag.TryGetValue("TrueSignCodeVal", out codeVal);
@@ -121,8 +121,15 @@
                             TrueSign.AddExternalSigner(Envelope_Id, signer, null);
                     }
                     else
+                    {
+                        args.SessionPropertyBag.TryGetValue("TrueSignNotifySigner", out notifySigner);
+
+                        if (!string.IsNullOrEmpty(notifySigner))
+                            notify = bool.Parse(notifySigner);
+
                         //This is an internal signer so all we need is their email address
-                        TrueSign.AddInternalSigner(Envelope_Id, signer.Email);
+                        TrueSign.AddInternalSigner(Envelope_Id, signer.Email, notify);
+                    }
 
                     //Close the envelope and mark it ready for the signer to sign.
                     TrueSign.SendEnvelope(Envelope_Id);

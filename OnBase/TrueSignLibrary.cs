@@ -13,6 +13,7 @@
     using System.Threading.Tasks;
     using System.IO;
     using System.Linq;
+    using System.Net;
 
     /// <summary>
     /// A library to connect to TrueSign Next.
@@ -45,6 +46,9 @@
         public TrueSignNext(Application app)
         {
             _App = app;
+
+            // Force TLS 1.2
+            System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         }
 
         /// <summary>
@@ -56,6 +60,9 @@
         public TrueSignNext(Application app, WorkflowEventArgs args)
         {
             _App = app;
+
+            // Force TLS 1.2
+            System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
             string clientId = string.Empty;
             string clientSecret = string.Empty;
@@ -173,8 +180,7 @@
         /// <param name="documents">A list of TS_Document objects. Can be null. Use AddToEnvelope() later if null</param>
         /// <param name="clientData">An optional string with data for you to utilize when a signed envelope returns back to your system</param>
         /// <returns></returns>
-        public Envelope CreateEnvelope(string title, List<Document_Dto> documents = default(List<Document_Dto>),
-            string clientData = default(string), Contact contact = default(Contact))
+        public Envelope CreateEnvelope(string title, List<Document_Dto> documents = default(List<Document_Dto>), string client_data = default(string), Contact contact = default(Contact))
         {
             try
             {
@@ -191,9 +197,9 @@
                 Envelope_Dto envelope = new Envelope_Dto()
                 {
                     Title = title,
-                    Client_Data = clientData,
+                    Client_Data = client_data,
                     Documents = documents,
-                    Contact = contact
+                    Contact = contact ?? new Contact()
                 };
 
                 //JSON encode the content and call the API
@@ -240,7 +246,7 @@
                     var doc = new Document_Dto()
                     {
                         Title = document.Name,
-                        Client_Id = document.ID.ToString()
+                        Client_Data = document.ID.ToString()
                     };
 
                     docs.Add(doc);
@@ -264,7 +270,7 @@
                 //For each document in the API response, upload the OnBase document bytes to the upload url returned by the API. 
                 foreach (var item in new_docs)
                 {
-                    var ob_doc = documents.Find(x => x.ID == Int32.Parse(item.Client_Id));
+                    var ob_doc = documents.Find(x => x.ID == Int32.Parse(item.Client_Data));
                     Upload(ob_doc, item.Upload_Url);
                 }
 
@@ -298,7 +304,7 @@
                 var doc = new Document_Dto()
                 {
                     Title = document.Name,
-                    Client_Id = document.ID.ToString()
+                    Client_Data = document.ID.ToString()
                 };
 
                 //Create a list of TS_Document object since the API requires a list for this endpoint
@@ -396,7 +402,7 @@
         /// <param name="envelope_id"></param>
         /// <param name="email"></param>
         /// <returns></returns>
-        public bool AddInternalSigner(Guid envelope_id, string email)
+        public bool AddInternalSigner(Guid envelope_id, string email, bool notify)
         {
             if (envelope_id == Guid.Empty)
                 throw new Exception("An envelope ID is required to send this request");
@@ -409,7 +415,8 @@
 
             Signer signer = new Signer()
             {
-                Email = email
+                Email = email,
+                Notify = notify
             };
 
             if (!_Authenticated)
@@ -428,17 +435,16 @@
 
 
         /// <summary>
-        /// Close the envelope and make it available to the required signer. 
-        /// You must close an envelope for the user to be able to sign it.
+        /// Send the envelope to the required signer. 
         /// </summary>
         /// <param name="id">The envelope ID</param>
         /// <returns>true/false</returns>
-        public bool SendEnvelope(Guid id)
+        public TrueSignNextLibrary.Envelope SendEnvelope(Guid id)
         {
             try
             {
                 _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose,
-                    string.Format("Attempting to mark envelope with ID {0} as CLOSED...", id.ToString()));
+                    string.Format("Sending envelope with ID {0} to the required signer...", id.ToString()));
 
                 //Check if the httpClient is authenticated
                 if (!_Authenticated)
@@ -452,15 +458,16 @@
                 response.EnsureSuccessStatusCode();
 
                 _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose,
-                    string.Format("Successfully marked envelope with ID {0} as CLOSED.", id.ToString()));
+                    string.Format("Successfully sent envelope with ID {0} to the signer.", id.ToString()));
 
-                return true;
+                var response_text = response.Content.ReadAsStringAsync().Result;
+                return JsonConvert.DeserializeObject<TrueSignNextLibrary.Envelope>(response_text);
             }
             catch (Exception ex)
             {
                 //An error has occurred. Write the exception to DC and return false.
                 _App.Diagnostics.Write(ex);
-                return false;
+                return null;
             }
         }
 
@@ -648,11 +655,11 @@
         /// This method will download the documents of the envelope and will create a new revision of the corresponding OnBase document.
         /// </summary>
         /// <param name="envelope">The envelope object that contains the signed documents</param>
-        /// <param name="signedOrStampedOnly">Download only documents that have had a signature or stamp added to them. Default: true</param>
+        /// <param name="signedOrStampedOnly">Download only documents that have had a signature or stamp added to them. Default: false</param>
         /// <param name="stampedKeywordName">The name of the keyword to set the Stamped (bool) value to. Default: Stamped</param>
         /// <param name="signedKeywordName">The name of the keyword to set the Signed (bool) value to. Default: Signed</param>
         /// <returns></returns>
-        public bool DownloadEnvelopeDocs(Envelope envelope, bool signedOrStampedOnly = true, string stampedKeywordName = "Stamped", string signedKeywordName = "Signed")
+        public bool DownloadEnvelopeDocs(Envelope envelope, bool signedOrStampedOnly = false, string stampedKeywordName = "Stamped", string signedKeywordName = "Signed")
         {
             try
             {
@@ -671,24 +678,30 @@
                 //Iterate through the document list
                 foreach (var doc in docs)
                 {
-                    _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Working with envelope document with title: {0} (ClientID: {1})", doc.Title, doc.Client_Id));
+                    _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Working with envelope document with title: {0} (ClientID: {1})", doc.Title, doc.Client_Data));
 
                     //Download the TrueSign document to a temp file
                     var path = DownloadFile(doc.Download_Url);
                     if (path != null)
                     {
-                        _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Creating a new OnBase revision for document with ID: {0}", doc.Client_Id));
+                        _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Creating a new OnBase revision for document with ID: {0}", doc.Client_Data));
 
                         //Create a new revision of the correcponding document in OnBase. Document will be PDF.
                         Storage storage = _App.Core.Storage;
-                        Hyland.Unity.Document document = _App.Core.GetDocumentByID(long.Parse(doc.Client_Id));
+                        Hyland.Unity.Document document = _App.Core.GetDocumentByID(long.Parse(doc.Client_Data));
                         FileType fileType = _App.Core.FileTypes.Find("PDF");
                         StoreRevisionProperties storeRevisionProperties = storage.CreateStoreRevisionProperties(document, fileType);
-                        storeRevisionProperties.Comment = "Downloaded from TrueSign Next";
+                        storeRevisionProperties.Comment = "Downloaded from TrueSign";
 
                         List<string> fileList = new List<string>();
                         fileList.Add(path);
                         Hyland.Unity.Document newDocument = storage.StoreNewRevision(fileList, storeRevisionProperties);
+
+                        //Add TrueSign history to OnBase document
+                        foreach (var history in doc.History)
+                        {
+                            DocumentHistoryItem docHistItem = _App.Core.LogManagement.CreateDocumentHistoryItem(newDocument, string.Format("TrueSign: {0} ({1})", history.Message, history.Email));
+                        }
 
                         //If the new document creation was successful
                         if (newDocument != null)
@@ -697,6 +710,7 @@
                             KeywordModifier keyModifier = newDocument.CreateKeywordModifier();
                             KeywordType signedKeywordType = _App.Core.KeywordTypes.Find(signedKeywordName);
                             KeywordType stampedKeywordType = _App.Core.KeywordTypes.Find(stampedKeywordName);
+
                             if (signedKeywordType != null)
                             {
                                 //Create keyword with value True/False
@@ -745,32 +759,14 @@
                             //Apply keyword changes
                             keyModifier.ApplyChanges();
 
-                            _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Successfully created a new OnBase revision for document with ID: {0}. Deleting temp file...", doc.Client_Id));
+                            _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Successfully created a new OnBase revision for document with ID: {0}. Deleting temp file...", doc.Client_Data));
 
                             //Delete temp file
                             File.Delete(path);
-
-                            //Check if item needs to be moved from the Waiting Q to the Done Q
-                            var waitingQ = _App.Workflow.Queues.Find(x => x.Name == "Waiting" && x.LifeCycle.Name == "TrueSign Next");
-                            if (waitingQ != null)
-                            {
-                                var doneQ = _App.Workflow.Queues.Find(x => x.Name == "Done" && x.LifeCycle.Name == "TrueSign Next");
-                                if (doneQ != null)
-                                {
-                                    try
-                                    {
-                                        //Try to transition doc - empty catch because the doc might not be in the queue
-                                        waitingQ.TransitionDocument(doneQ, document);
-                                    }
-                                    catch { }
-
-                                    _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Successfully transitioned document with ID: {0} to the Done queue.", document.ID));
-                                }
-                            }
                         }
                         else
                         {
-                            _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Error, string.Format("Failed to create a new OnBase revision for document with ID: {0}", doc.Client_Id));
+                            _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Error, string.Format("Failed to create a new OnBase revision for document with ID: {0}", doc.Client_Data));
                         }
                     }
                 }
@@ -833,7 +829,7 @@
     {
         public Guid Id { get; set; }
         public string Title { get; set; }
-        public string Client_Id { get; set; }
+        public string Client_Data { get; set; }
         public string Upload_Url { get; set; }
         public string Download_Url { get; set; }
         public bool Signed { get; set; }
@@ -844,7 +840,7 @@
     public class Document_Dto
     {
         public string Title { get; set; }
-        public string Client_Id { get; set; }
+        public string Client_Data { get; set; }
     }
 
     public class Document_History
@@ -887,6 +883,7 @@
         public bool Completed { get; set; }
         public bool Rejected { get; set; }
         public string Reject_Reason { get; set; }
+        public bool Notify { get; set; }
     }
 
     public class Signer_Dto
@@ -922,6 +919,14 @@
     {
         Internal,
         External
+    }
+
+    public enum DeliveryMethod
+    {
+        TrueSignAPI = 0,
+        ServiceBus = 1,
+        Email = 2,
+        WebHook = 3
     }
 
     public enum Envelope_Status
