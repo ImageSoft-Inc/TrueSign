@@ -180,7 +180,8 @@
         /// <param name="documents">A list of TS_Document objects. Can be null. Use AddToEnvelope() later if null</param>
         /// <param name="clientData">An optional string with data for you to utilize when a signed envelope returns back to your system</param>
         /// <returns></returns>
-        public Envelope CreateEnvelope(string title, List<Document_Dto> documents = default(List<Document_Dto>), string client_data = default(string), Contact contact = default(Contact))
+        public Envelope CreateEnvelope(string title, List<Document_Dto> documents = default(List<Document_Dto>), string client_data = default(string),
+            Contact contact = default(Contact), string override_Method = null)
         {
             try
             {
@@ -201,6 +202,9 @@
                     Documents = documents,
                     Contact = contact ?? new Contact()
                 };
+
+                if (!string.IsNullOrEmpty(override_Method))
+                    envelope.Delivery_Method_Override = (DeliveryMethod)Enum.Parse(typeof(DeliveryMethod), override_Method);
 
                 //JSON encode the content and call the API
                 var json = JsonConvert.SerializeObject(envelope);
@@ -307,6 +311,7 @@
                     Client_Data = document.ID.ToString()
                 };
 
+
                 //Create a list of TS_Document object since the API requires a list for this endpoint
                 var documents = new List<Document_Dto>() { doc };
 
@@ -340,50 +345,49 @@
         /// <summary>
         /// Add an external signer to the envelope.
         /// </summary>
-        /// <param name="envelope_id"></param>
-        /// <param name="dto"></param>
-        /// <param name="access_code"></param>
+        /// <param name="envelope_id">The Id of the envelope</param>
+        /// <param name="signer"></param>
         /// <returns></returns>
-        public bool AddExternalSigner(Guid envelope_id, Signer_Dto dto, Access_Code access_code)
+        public bool AddExternalSigner(Guid envelope_id, Signer signer)
         {
             if (envelope_id == Guid.Empty)
                 throw new Exception("An envelope ID is required to send this request");
 
-            if (dto == null)
-                throw new Exception("A new envelope object is required");
+            if (signer == null)
+                throw new Exception("A new signer object is required");
+            /*
+                        if (string.IsNullOrEmpty(dto.Email))
+                            throw new Exception("An email address is required for the external signer");
 
-            if (string.IsNullOrEmpty(dto.Email))
-                throw new Exception("An email address is required for the external signer");
+                        if (string.IsNullOrEmpty(dto.First_Name))
+                            throw new Exception("A first name is required for the external signer");
 
-            if (string.IsNullOrEmpty(dto.First_Name))
-                throw new Exception("A first name is required for the external signer");
+                        if (string.IsNullOrEmpty(dto.Last_Name))
+                            throw new Exception("A last name is required for the external signer");
 
-            if (string.IsNullOrEmpty(dto.Last_Name))
-                throw new Exception("A last name is required for the external signer");
+                        Signer signer = new Signer()
+                        {
+                            Email = dto.Email,
+                            First_Name = dto.First_Name,
+                            Last_Name = dto.Last_Name,
+                            Type = Signer_Type.External
+                        };
 
-            Signer signer = new Signer()
-            {
-                Email = dto.Email,
-                First_Name = dto.First_Name,
-                Last_Name = dto.Last_Name,
-                Type = Signer_Type.External
-            };
+                        if (access_code != null)
+                        {
+                            if (string.IsNullOrEmpty(access_code.Description))
+                                throw new Exception("A description is required for the access code");
+                            if (string.IsNullOrEmpty(access_code.Value))
+                                throw new Exception("A value is required for the access code");
 
-            if (access_code != null)
-            {
-                if (string.IsNullOrEmpty(access_code.Description))
-                    throw new Exception("A description is required for the access code");
-                if (string.IsNullOrEmpty(access_code.Value))
-                    throw new Exception("A value is required for the access code");
-
-                signer.Code = access_code;
-            }
-
+                            signer.Code = access_code;
+                        }
+            */
             if (!_Authenticated)
                 Authenticate();
 
             _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose,
-                    string.Format("Adding external signer with email {0} to envelope with ID {1}.", dto.Email, envelope_id.ToString()));
+                    string.Format("Adding external signer with email {0} to envelope with ID {1}.", signer.Email, envelope_id.ToString()));
 
             var json = JsonConvert.SerializeObject(signer);
             var response = _Http_Client.PostAsync($"envelope/{envelope_id}/AddExternalSigner", new StringContent(json, Encoding.UTF8, "application/json")).Result;
@@ -399,26 +403,27 @@
         /// <summary>
         /// Add an internal signer to the envelope.
         /// </summary>
-        /// <param name="envelope_id"></param>
-        /// <param name="email"></param>
+        /// <param name="envelope_id">The Id of the envelope</param>
+        /// <param name="signer"></param>
+        /// <param name="notify"></param>
         /// <returns></returns>
-        public bool AddInternalSigner(Guid envelope_id, string email, bool notify)
+        public bool AddInternalSigner(Guid envelope_id, Signer signer, bool notify)
         {
             if (envelope_id == Guid.Empty)
                 throw new Exception("An envelope ID is required to send this request");
 
-            if (string.IsNullOrEmpty(email))
-                throw new Exception("An email address is required for the internal signer");
+            if (signer == null)
+                throw new Exception("An signer object is required to add an internal signer");
 
             _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose,
-                    string.Format("Adding internal signer with email {0} to envelope with ID {1}.", email, envelope_id.ToString()));
-
-            Signer signer = new Signer()
-            {
-                Email = email,
-                Notify = notify
-            };
-
+                    string.Format("Adding internal signer with email {0} to envelope with ID {1}.", signer.Email, envelope_id.ToString()));
+            /*
+                        Signer signer = new Signer()
+                        {
+                            Email = email,
+                            Notify = notify
+                        };
+            */
             if (!_Authenticated)
                 Authenticate();
 
@@ -433,6 +438,67 @@
             return true;
         }
 
+        /// <summary>
+        /// Set a list of designers who are allowed to add signers and anchors in the TrueSign app.
+        /// </summary>
+        /// <param name="envelope_id">The Id of the envelope</param>
+        /// <param name="designers">A list of email addresses of TrueSign users</param>
+        /// <returns></returns>
+        public bool SetDesigners(Guid envelope_id, List<string> designers)
+        {
+            if (envelope_id == Guid.Empty)
+                throw new Exception("An envelope ID is required to send this request");
+
+            if (designers == null || designers.Count == 0)
+                throw new Exception("A designer is required");
+
+            _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose,
+                    string.Format("Setting designers for envelope with ID {0}.", envelope_id.ToString()));
+
+            if (!_Authenticated)
+                Authenticate();
+
+            var json = JsonConvert.SerializeObject(designers);
+            var response = _Http_Client.PostAsync($"envelope/{envelope_id}/SetDesigners", new StringContent(json, Encoding.UTF8, "application/json")).Result;
+
+            var response_text = response.Content.ReadAsStringAsync().Result;
+
+            if (!response.IsSuccessStatusCode)
+                throw new Exception(response_text);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Set a list of designers who are allowed to add signers and anchors in the TrueSign app.
+        /// </summary>
+        /// <param name="envelope_id">The Id of the envelope</param>
+        /// <param name="designers">A list of email addresses of TrueSign users</param>
+        /// <returns></returns>
+        public bool SetCreator(Guid envelope_id, string email)
+        {
+            if (envelope_id == Guid.Empty)
+                throw new Exception("An envelope ID is required to send this request");
+
+            if (string.IsNullOrEmpty(email))
+                throw new Exception("A creator email address is required");
+
+            _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose,
+                    string.Format("Setting creator for envelope with ID {0}.", envelope_id.ToString()));
+
+            if (!_Authenticated)
+                Authenticate();
+
+            Creator creator = new Creator() { Email = email };
+            var response = _Http_Client.PostAsync($"envelope/{envelope_id}/SetCreator", new StringContent(JsonConvert.SerializeObject(creator), Encoding.UTF8, "application/json")).Result;
+
+            var response_text = response.Content.ReadAsStringAsync().Result;
+
+            if (!response.IsSuccessStatusCode)
+                throw new Exception(response_text);
+
+            return true;
+        }
 
         /// <summary>
         /// Send the envelope to the required signer. 
@@ -628,7 +694,7 @@
                 using (var client = new HttpClient())
                 {
                     //Get temp file path
-                    var path = Path.GetTempFileName();
+                    var path = Path.GetTempPath() + Path.AltDirectorySeparatorChar + Guid.NewGuid().ToString() + ".pdf";
                     _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("File to be temporarly save at path: {0}", path));
 
                     //Download the byte content from the URL
@@ -691,7 +757,7 @@
                         Hyland.Unity.Document document = _App.Core.GetDocumentByID(long.Parse(doc.Client_Data));
                         FileType fileType = _App.Core.FileTypes.Find("PDF");
                         StoreRevisionProperties storeRevisionProperties = storage.CreateStoreRevisionProperties(document, fileType);
-                        storeRevisionProperties.Comment = "Downloaded from TrueSign";
+                        storeRevisionProperties.Comment = "Signed with TrueSign. Envelope ID: " + envelope.Id.ToString();
 
                         List<string> fileList = new List<string>();
                         fileList.Add(path);
@@ -706,6 +772,22 @@
                         //If the new document creation was successful
                         if (newDocument != null)
                         {
+                            //Check if any anchors were assigned to a signer
+                            foreach (var signer in envelope.Content.Signers.FindAll(x => x.Anchors.Count > 0))
+                            {
+                                foreach (var anchor in signer.Anchors.FindAll(a => a.Applied))
+                                {
+                                    var noteId = long.Parse(anchor.Client_Data);
+                                    var docNote = newDocument.Notes.Find(noteId);
+                                    if (docNote != null)
+                                    {
+                                        var noteModifier = newDocument.CreateNoteModifier();
+                                        noteModifier.RemoveNote(docNote);
+                                        noteModifier.ApplyChanges();
+                                    }
+                                }
+                            }
+
                             //then set the signed and stamped keywords
                             KeywordModifier keyModifier = newDocument.CreateKeywordModifier();
                             KeywordType signedKeywordType = _App.Core.KeywordTypes.Find(signedKeywordName);
@@ -801,6 +883,7 @@
         public Contact Contact { get; set; }
         public string Client_Data { get; set; }
         public List<Document_Dto> Documents { get; set; }
+        public DeliveryMethod? Delivery_Method_Override { get; set; }
     }
 
     public class Contact
@@ -879,6 +962,7 @@
         public string Email { get; set; }
 
         public Access_Code Code { get; set; }
+        public List<Anchor> Anchors { get; set; }
 
         public bool Completed { get; set; }
         public bool Rejected { get; set; }
@@ -897,6 +981,44 @@
     {
         public string Description { get; set; }
         public string Value { get; set; }
+    }
+
+    public class Creator
+    {
+        public string Email { get; set; }
+    }
+
+    public class Anchor
+    {
+        public Guid Id { get; set; }
+        public Guid Doc_Id { get; set; }
+        public long X { get; set; }
+        public long Y { get; set; }
+        public long Width { get; set; }
+        public long Height { get; set; }
+        public int Page { get; set; }
+        public Anchor_Type Type { get; set; }
+        public bool Required { get; set; }
+        public string Client_Data { get; set; }
+        public string Comment { get; set; }
+        public bool Applied { get; set; }
+    }
+
+    public enum Anchor_Type
+    {
+        SignHere = 0,
+        InitialHere = 1,
+        DateHere = 2,
+        CheckmarkHere = 3,
+        TextboxHere = 4
+    }
+
+    public enum DeliveryMethod
+    {
+        TrueSignAPI = 0,
+        ServiceBus = 1,
+        Email = 2,
+        WebHook = 3
     }
 
     public enum Envelope_History_Type
@@ -919,14 +1041,6 @@
     {
         Internal,
         External
-    }
-
-    public enum DeliveryMethod
-    {
-        TrueSignAPI = 0,
-        ServiceBus = 1,
-        Email = 2,
-        WebHook = 3
     }
 
     public enum Envelope_Status
