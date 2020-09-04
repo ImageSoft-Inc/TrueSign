@@ -1,6 +1,6 @@
 # Welcome to TrueSign
 
-TrueSign® is a web application that allows individuals and organizations sign and stamp documents electronically. This public repository is meant to help organizations integrate TrueSign with their business applications. To learn more about TrueSign, click [here](https://truesign.com). If you would like to try a live demo, please click [here](https://truesign.com/demo).
+TrueSign® is a web application that allows individuals and organizations to sign and stamp documents electronically. This public repository is meant to help organizations integrate TrueSign with their business applications. To learn more about TrueSign, click [here](https://truesign.com). If you would like to try a live demo, please click [here](https://truesign.com/demo).
 
 It is important that you also visit out API page at [api.truesign.com](https://api.truesign.com) to read more about our REST API and fully understand our code samples.
 
