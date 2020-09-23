@@ -777,13 +777,16 @@
                             {
                                 foreach (var anchor in signer.Anchors.FindAll(a => a.Applied))
                                 {
-                                    var noteId = long.Parse(anchor.Client_Data);
-                                    var docNote = newDocument.Notes.Find(noteId);
-                                    if (docNote != null)
+                                    if (!string.IsNullOrEmpty(anchor.Client_Data))
                                     {
-                                        var noteModifier = newDocument.CreateNoteModifier();
-                                        noteModifier.RemoveNote(docNote);
-                                        noteModifier.ApplyChanges();
+                                        var noteId = long.Parse(anchor.Client_Data);
+                                        var docNote = newDocument.Notes.Find(noteId);
+                                        if (docNote != null)
+                                        {
+                                            var noteModifier = newDocument.CreateNoteModifier();
+                                            noteModifier.RemoveNote(docNote);
+                                            noteModifier.ApplyChanges();
+                                        }
                                     }
                                 }
                             }
@@ -796,7 +799,7 @@
                             if (signedKeywordType != null)
                             {
                                 //Create keyword with value True/False
-                                Keyword newKeyword = signedKeywordType.CreateKeyword(doc.Signed.ToString());
+                                Keyword newKeyword = signedKeywordType.CreateKeyword(doc.Signed ? "Yes" : "");
 
                                 //Check if the document contains a Signed keyword type
                                 var keyRec = newDocument.KeywordRecords.Find(signedKeywordType);
@@ -819,7 +822,7 @@
                             if (stampedKeywordType != null)
                             {
                                 //Create keyword with value True/False
-                                Keyword newKeyword = stampedKeywordType.CreateKeyword(doc.Stamped.ToString());
+                                Keyword newKeyword = stampedKeywordType.CreateKeyword(doc.Stamped ? "Yes" : "");
 
                                 //Check if the document contains a Stamped keyword type
                                 var keyRec = newDocument.KeywordRecords.Find(stampedKeywordType);
