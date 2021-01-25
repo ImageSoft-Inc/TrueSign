@@ -355,34 +355,7 @@
 
             if (signer == null)
                 throw new Exception("A new signer object is required");
-            /*
-                        if (string.IsNullOrEmpty(dto.Email))
-                            throw new Exception("An email address is required for the external signer");
 
-                        if (string.IsNullOrEmpty(dto.First_Name))
-                            throw new Exception("A first name is required for the external signer");
-
-                        if (string.IsNullOrEmpty(dto.Last_Name))
-                            throw new Exception("A last name is required for the external signer");
-
-                        Signer signer = new Signer()
-                        {
-                            Email = dto.Email,
-                            First_Name = dto.First_Name,
-                            Last_Name = dto.Last_Name,
-                            Type = Signer_Type.External
-                        };
-
-                        if (access_code != null)
-                        {
-                            if (string.IsNullOrEmpty(access_code.Description))
-                                throw new Exception("A description is required for the access code");
-                            if (string.IsNullOrEmpty(access_code.Value))
-                                throw new Exception("A value is required for the access code");
-
-                            signer.Code = access_code;
-                        }
-            */
             if (!_Authenticated)
                 Authenticate();
 
@@ -407,7 +380,7 @@
         /// <param name="signer"></param>
         /// <param name="notify"></param>
         /// <returns></returns>
-        public bool AddInternalSigner(Guid envelope_id, Signer signer, bool notify)
+        public bool AddInternalSigner(Guid envelope_id, Signer signer)
         {
             if (envelope_id == Guid.Empty)
                 throw new Exception("An envelope ID is required to send this request");
@@ -417,13 +390,7 @@
 
             _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose,
                     string.Format("Adding internal signer with email {0} to envelope with ID {1}.", signer.Email, envelope_id.ToString()));
-            /*
-                        Signer signer = new Signer()
-                        {
-                            Email = email,
-                            Notify = notify
-                        };
-            */
+
             if (!_Authenticated)
                 Authenticate();
 

@@ -111,10 +111,10 @@
                             args.SessionPropertyBag.TryGetValue("TrueSignNotifySigner", out notifySigner);
 
                             if (!string.IsNullOrEmpty(notifySigner))
-                                notify = bool.Parse(notifySigner);
+                                signer.Notify = bool.Parse(notifySigner);
 
                             //This is an internal signer so all we need is their email address
-                            TrueSign.AddInternalSigner(Envelope_Id, signer, notify);
+                            TrueSign.AddInternalSigner(Envelope_Id, signer);
                         }
                     }
 
