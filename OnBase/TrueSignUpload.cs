@@ -165,7 +165,10 @@
                             args.SessionPropertyBag.TryGetValue("TrueSignAnchors", out noteJson);
 
                             List<Anchor> anchors = string.IsNullOrEmpty(noteJson) ? new List<Anchor>() : JsonConvert.DeserializeObject<List<Anchor>>(noteJson);
-                            foreach (var note in args.Document.Notes.FindAll(x => x.NoteType.ID == noteId))
+
+                            //Get all the document notes for the configured NoteTypeID. Make sure to only get notes of the latest revision
+                            //and the notes that have Repeat On All Revisions set to True.
+                            foreach (var note in args.Document.Notes.FindAll(x => x.NoteType.ID == noteId && (x.DocumentRevision.ID == args.Document.LatestRevision.ID || x.NoteType.DisplaySettings == NoteTypeDisplaySettings.RepeatOnAllRevisions)))
                             {
                                 var anchor = new Anchor();
                                 anchor.Id = Guid.NewGuid();

@@ -724,8 +724,9 @@
         /// <param name="signedOrStampedOnly">Download only documents that have had a signature or stamp added to them. Default: false</param>
         /// <param name="stampedKeywordName">The name of the keyword to set the Stamped (bool) value to. Default: Stamped</param>
         /// <param name="signedKeywordName">The name of the keyword to set the Signed (bool) value to. Default: Signed</param>
+        /// <param name="reloadNotes">Reload the notes from the prior revision. Default: True</param>
         /// <returns></returns>
-        public bool DownloadEnvelopeDocs(Envelope envelope, bool signedOrStampedOnly = false, string stampedKeywordName = "Stamped", string signedKeywordName = "Signed")
+        public bool DownloadEnvelopeDocs(Envelope envelope, bool signedOrStampedOnly = false, string stampedKeywordName = "Stamped", string signedKeywordName = "Signed", bool reloadNotes = true)
         {
             try
             {
@@ -755,6 +756,10 @@
                         //Create a new revision of the correcponding document in OnBase. Document will be PDF.
                         Storage storage = _App.Core.Storage;
                         Hyland.Unity.Document document = _App.Core.GetDocumentByID(long.Parse(doc.Client_Data));
+                        if (document == null)
+                            throw new Exception(string.Format("Document with ID {0} no longer exists in OnBase. Unable to create revision with signed copy.", doc.Client_Data));
+
+                        var oldRevisionId = document.LatestRevision.ID;
                         FileType fileType = _App.Core.FileTypes.Find("PDF");
                         StoreRevisionProperties storeRevisionProperties = storage.CreateStoreRevisionProperties(document, fileType);
                         storeRevisionProperties.Comment = "Signed with TrueSign. Envelope ID: " + envelope.Id.ToString();
@@ -772,23 +777,58 @@
                         //If the new document creation was successful
                         if (newDocument != null)
                         {
+                            var anchors = new List<Anchor>();
+
                             //Check if any anchors were assigned to a signer
                             foreach (var signer in envelope.Content.Signers.FindAll(x => x.Anchors.Count > 0))
                             {
-                                foreach (var anchor in signer.Anchors.FindAll(a => a.Applied))
+                                anchors.AddRange(signer.Anchors.FindAll(a => a.Applied && !string.IsNullOrEmpty(a.Client_Data)));
+                            }
+
+                            //Check if we need to reload the old notes on the new revision
+                            if (reloadNotes)
+                            {
+                                //Get all the old notes
+                                List<Note> oldNotes = new List<Note>(document.Notes.FindAll(x =>
+                                    x.DocumentRevision.ID == oldRevisionId && x.NoteType.DisplaySettings != NoteTypeDisplaySettings.RepeatOnAllRevisions));
+
+                                _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose,
+                                    string.Format("There are {0} old notes to be carried to the new revision.", oldNotes.Count.ToString()));
+
+                                if (oldNotes.Count > 0)
                                 {
-                                    if (!string.IsNullOrEmpty(anchor.Client_Data))
+                                    var noteModifier = newDocument.CreateNoteModifier();
+                                    foreach (var oldNote in oldNotes)
                                     {
-                                        var noteId = long.Parse(anchor.Client_Data);
-                                        var docNote = newDocument.Notes.Find(noteId);
-                                        if (docNote != null)
+                                        //If old note was not an anchor
+                                        if (!anchors.Exists(x => x.Client_Data == oldNote.ID.ToString()))
                                         {
-                                            var noteModifier = newDocument.CreateNoteModifier();
-                                            noteModifier.RemoveNote(docNote);
-                                            noteModifier.ApplyChanges();
+                                            var noteProperties = noteModifier.CreateNoteProperties();
+                                            noteProperties.PageNumber = oldNote.PageNumber;
+                                            noteProperties.Position = noteModifier.CreateNotePosition(oldNote.Position.X, oldNote.Position.Y);
+                                            noteProperties.Size = noteModifier.CreateNoteSize(oldNote.Size.Height, oldNote.Size.Width);
+                                            noteProperties.Text = oldNote.Text;
+                                            // Create the new note and add it to the document
+                                            var newNote = oldNote.NoteType.CreateNote(noteProperties);
+                                            noteModifier.AddNote(newNote);
                                         }
                                     }
+                                    noteModifier.ApplyChanges();
                                 }
+                            }
+
+                            if (anchors.Count > 0)
+                            {
+                                //Remove the notes that were there as anchors
+                                var noteModifier = document.CreateNoteModifier();
+                                foreach (var anchor in anchors)
+                                {
+                                    var noteId = long.Parse(anchor.Client_Data);
+                                    var docNote = document.Notes.Find(noteId);
+                                    if (docNote != null)
+                                        noteModifier.RemoveNote(docNote);
+                                }
+                                noteModifier.ApplyChanges();
                             }
 
                             //then set the signed and stamped keywords
@@ -799,7 +839,7 @@
                             if (signedKeywordType != null)
                             {
                                 //Create keyword with value True/False
-                                Keyword newKeyword = signedKeywordType.CreateKeyword(doc.Signed ? "Yes" : "");
+                                Keyword newKeyword = signedKeywordType.CreateKeyword(doc.Signed ? "Y" : "N");
 
                                 //Check if the document contains a Signed keyword type
                                 var keyRec = newDocument.KeywordRecords.Find(signedKeywordType);
@@ -822,7 +862,7 @@
                             if (stampedKeywordType != null)
                             {
                                 //Create keyword with value True/False
-                                Keyword newKeyword = stampedKeywordType.CreateKeyword(doc.Stamped ? "Yes" : "");
+                                Keyword newKeyword = stampedKeywordType.CreateKeyword(doc.Stamped ? "Y" : "N");
 
                                 //Check if the document contains a Stamped keyword type
                                 var keyRec = newDocument.KeywordRecords.Find(stampedKeywordType);
