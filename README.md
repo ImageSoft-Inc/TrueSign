@@ -4,6 +4,12 @@ TrueSign® is a web application that allows individuals and organizations to sig
 
 It is important that you also visit our API page at [api.truesign.com](https://api.truesign.com) to read more about our REST API and fully understand our code samples.
 
+
+## Integration with Hyland's OnBase
+
+If you are integrating OnBase with TrueSign, please take a look at our [TrueSign Integration for OnBase guide](https://api.truesign.com/kba/OnBase/TrueSignIntegrationForOnBase.pdf).
+
+
 ## About TrueSign.Shared
 
 ImageSoft has published a NuGet package, called [TrueSign.Shared](https://www.nuget.org/packages/truesign.shared), that allows you to quickly integrate with TrueSign from a .Net Framework or C++ application. TrueSign.Shared contains a library with the core logic to communicate with the TrueSign API. This package will be updated as the API changes. For more information, please visit the NuGet page for this package.
