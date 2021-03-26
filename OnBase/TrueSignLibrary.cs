@@ -235,7 +235,7 @@
         /// <param name="id">The Id of the envelope</param>
         /// <param name="documents">A list of OnBase documents</param>
         /// <returns></returns>
-        public List<TrueSignNextLibrary.Document> AddToEnvelope(Guid id, List<Hyland.Unity.Document> documents)
+        public List<TrueSignNextLibrary.Document> AddToEnvelope(Guid id, List<Hyland.Unity.Document> documents, bool reference = false)
         {
             try
             {
@@ -252,6 +252,11 @@
                         Title = document.Name,
                         Client_Data = document.ID.ToString()
                     };
+
+                    if (reference)
+                    {
+                        doc.Title = "Reference - " + doc.Title;
+                    }
 
                     docs.Add(doc);
                 }
@@ -378,7 +383,6 @@
         /// </summary>
         /// <param name="envelope_id">The Id of the envelope</param>
         /// <param name="signer"></param>
-        /// <param name="notify"></param>
         /// <returns></returns>
         public bool AddInternalSigner(Guid envelope_id, Signer signer)
         {
@@ -873,6 +877,184 @@
                 return false;
             }
         }
+
+        /// <summary>
+        /// This method will download the documents of the envelope and will create a new document in OnBase, based on the original uploaded document.
+        /// </summary>
+        /// <param name="envelope">The envelope object that contains the signed documents</param>
+        /// <param name="copyOldHistory">Copy the orginal document history to the new one. Default: false. WARNING: datetime and user set to current.</param>
+        /// <param name="deleteOldDocument">Delete the orginal document after creating the new one. Default: false</param>
+        /// <param name="signedOrStampedOnly">Download only documents that have had a signature or stamp added to them. Default: false</param>
+        /// <param name="stampedKeywordName">The name of the keyword to set the Stamped (bool) value to. Default: Stamped</param>
+        /// <param name="signedKeywordName">The name of the keyword to set the Signed (bool) value to. Default: Signed</param>
+        /// <returns></returns>
+        public bool DownloadEnvelopeDocsAsNewDocs(Envelope envelope, bool copyOldHistory = false, bool deleteOldDocument = false, bool signedOrStampedOnly = false, string stampedKeywordName = "Stamped", string signedKeywordName = "Signed")
+        {
+            try
+            {
+                _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Downloading documents for envelope with title: {0}", envelope.Content.Title));
+
+                var docs = new List<TrueSignNextLibrary.Document>();
+                if (signedOrStampedOnly)
+                    //filter only aigned or stamped documents
+                    docs = envelope.Content.Documents.FindAll(x => x.Signed || x.Stamped);
+                else
+                    //include all documents in the envelope
+                    docs = envelope.Content.Documents;
+
+                _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Envelope has {0} documents.", envelope.Content.Documents.Count));
+
+                //Iterate through the document list
+                foreach (var doc in docs)
+                {
+                    _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Working with envelope document with title: {0} (ClientID: {1})", doc.Title, doc.Client_Data));
+
+                    //Download the TrueSign document to a temp file
+                    var path = DownloadFile(doc.Download_Url);
+                    if (path != null)
+                    {
+                        _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Creating a new OnBase revision for document with ID: {0}", doc.Client_Data));
+
+                        //Create a new revision of the correcponding document in OnBase. Document will be PDF.
+                        Storage storage = _App.Core.Storage;
+                        Hyland.Unity.Document document = _App.Core.GetDocumentByID(long.Parse(doc.Client_Data));
+                        FileType fileType = _App.Core.FileTypes.Find("PDF");
+                        StoreNewDocumentProperties storeDocumentProperties = storage.CreateStoreNewDocumentProperties(document.DocumentType, fileType);
+                        storeDocumentProperties.Comment = "Signed with TrueSign. Envelope ID: " + envelope.Id.ToString() + ". Original OnBase doc handle: " + document.ID.ToString();
+                        storeDocumentProperties.DocumentDate = document.DocumentDate;
+
+                        //Copy key records from old doc to the signed one
+                        foreach (var keyRec in document.KeywordRecords)
+                        {
+                            storeDocumentProperties.AddKeywordRecord(keyRec.CreateEditableKeywordRecord());
+                        }
+
+                        List<string> fileList = new List<string>();
+                        fileList.Add(path);
+                        Hyland.Unity.Document newDocument = storage.StoreNewDocument(fileList, storeDocumentProperties);
+
+                        //Copy the old history to the new doc. WARNING: datetime and user set to current.
+                        if (copyOldHistory)
+                        {
+                            var oldDocHistory = document.GetHistory();
+                            foreach (var histItem in oldDocHistory)
+                            {
+                                _App.Core.LogManagement.CreateDocumentHistoryItem(newDocument,
+                                    string.Format("Date: {0}; User: {1}; Action: {2}; Message: {3}", histItem.LogDate.ToLongDateString(), histItem.User == null ? "" : histItem.User.DisplayName, histItem.Message));
+                            }
+                        }
+
+                        //Add TrueSign history to OnBase document
+                        foreach (var history in doc.History)
+                        {
+                            DocumentHistoryItem docHistItem = _App.Core.LogManagement.CreateDocumentHistoryItem(newDocument, string.Format("TrueSign: {0} ({1})", history.Message, history.Email));
+                        }
+
+                        //If the new document creation was successful
+                        if (newDocument != null)
+                        {
+                            var anchorNotes = new List<long>();
+                            //Check if any anchors were assigned to a signer
+                            foreach (var signer in envelope.Content.Signers.FindAll(x => x.Anchors.Count > 0))
+                            {
+                                foreach (var anchor in signer.Anchors.FindAll(a => a.Applied))
+                                {
+                                    var noteId = long.Parse(anchor.Client_Data);
+                                    anchorNotes.Add(noteId);
+                                }
+                            }
+
+                            var noteModifier = newDocument.CreateNoteModifier();
+                            foreach (var note in document.Notes)
+                            {
+                                if (!anchorNotes.Contains(note.ID))
+                                {
+                                    noteModifier.AddNote(note);
+                                }
+                            }
+                            noteModifier.ApplyChanges();
+
+                            //then set the signed and stamped keywords
+                            KeywordModifier keyModifier = newDocument.CreateKeywordModifier();
+                            KeywordType signedKeywordType = _App.Core.KeywordTypes.Find(signedKeywordName);
+                            KeywordType stampedKeywordType = _App.Core.KeywordTypes.Find(stampedKeywordName);
+
+                            if (signedKeywordType != null)
+                            {
+                                //Create keyword with value True/False
+                                Keyword newKeyword = signedKeywordType.CreateKeyword(doc.Signed ? "Y" : "N");
+
+                                //Check if the document contains a Signed keyword type
+                                var keyRec = newDocument.KeywordRecords.Find(signedKeywordType);
+                                if (keyRec != null)
+                                {
+                                    //Retrieve keyword to update
+                                    foreach (Keyword keyword in keyRec.Keywords.FindAll(signedKeywordType))
+                                    {
+                                        //Update the keyword in the keyword modifier object
+                                        keyModifier.UpdateKeyword(keyword, newKeyword);
+                                    }
+                                }
+                                else
+                                    keyModifier.AddKeyword(newKeyword);
+
+                            }
+                            else
+                                _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("There was no keyword type found with name: {0}", signedKeywordName));
+
+                            if (stampedKeywordType != null)
+                            {
+                                //Create keyword with value True/False
+                                Keyword newKeyword = stampedKeywordType.CreateKeyword(doc.Stamped ? "Y" : "N");
+
+                                //Check if the document contains a Stamped keyword type
+                                var keyRec = newDocument.KeywordRecords.Find(stampedKeywordType);
+                                if (keyRec != null)
+                                {
+                                    //Retrieve keyword to update
+                                    foreach (Keyword keyword in keyRec.Keywords.FindAll(stampedKeywordType))
+                                    {
+                                        //Update the keyword in the keyword modifier object
+                                        keyModifier.UpdateKeyword(keyword, newKeyword);
+                                    }
+                                }
+                                else
+                                    keyModifier.AddKeyword(newKeyword);
+                            }
+                            else
+                                _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("There was no keyword type found with name: {0}", stampedKeywordName));
+
+                            //Apply keyword changes
+                            keyModifier.ApplyChanges();
+
+                            _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Verbose, string.Format("Successfully created a new OnBase revision for document with ID: {0}. Deleting temp file...", doc.Client_Data));
+
+                            //Delete temp file
+                            File.Delete(path);
+
+                            //Delete the old document
+                            if (deleteOldDocument)
+                            {
+                                storage.DeleteDocument(document);
+                            }
+                        }
+                        else
+                        {
+                            _App.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Error, string.Format("Failed to create a new OnBase revision for document with ID: {0}", doc.Client_Data));
+                        }
+                    }
+                }
+
+                //If everything went fine, then return true.
+                return true;
+            }
+            catch (Exception ex)
+            {
+                //An error has occurred. Write the exception to DC and return false.
+                _App.Diagnostics.Write(ex);
+                return false;
+            }
+        }
     }
 
     /*
@@ -927,6 +1109,7 @@
         public string Download_Url { get; set; }
         public bool Signed { get; set; }
         public bool Stamped { get; set; }
+        public bool Modified { get; set; }
         public List<Document_History> History { get; set; }
     }
 
@@ -978,6 +1161,7 @@
         public bool Rejected { get; set; }
         public string Reject_Reason { get; set; }
         public bool Notify { get; set; }
+        public Reminder Reminder { get; set; }
     }
 
     public class Signer_Dto
@@ -1012,6 +1196,19 @@
         public string Client_Data { get; set; }
         public string Comment { get; set; }
         public bool Applied { get; set; }
+    }
+
+    public class Reminder
+    {
+        public bool Enabled { get; set; }
+        public int AfterDays { get; set; }
+        public Reminder_Schedule? Schedule { get; set; }
+    }
+
+    public enum Reminder_Schedule
+    {
+        Daily, //Every day ~ 6 am
+        Weekly, //On Monday ~ 6 am
     }
 
     public enum Anchor_Type

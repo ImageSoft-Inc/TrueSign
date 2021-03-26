@@ -29,7 +29,7 @@
                 Guid Envelope_Id = Guid.Empty;
                 string propEnvId = "", title = "", notifySigner = "", overrideDeliveryMethod = "", singleEmail = "";
                 string[] multipleEmails = new string[10], designers = new string[10];
-                bool notify = true, design = false;
+                bool notify = true, design = false, uploadStaples = false;
 
                 //Initiate a new TrueSign object. The clint API creds must have been set
                 //on Session Property bags before the script was called.
@@ -81,6 +81,17 @@
                 if (doc == null)
                     throw new Exception(string.Format("Failed to add document to envelope. Doc ID: {0}", args.Document.ID));
 
+                args.SessionPropertyBag.TryGetValue("TrueSignUploadStaples", out uploadStaples);
+                if (uploadStaples)
+                {
+                    List<Hyland.Unity.Document> staples = new List<Hyland.Unity.Document>();
+                    foreach (var note in args.Document.Notes.FindAll(x => x.NoteType.Flavor == NoteFlavor.Staple))
+                        staples.Add(note.StapledDocument);
+
+                    if (staples.Count > 0)
+                        TrueSign.AddToEnvelope(Envelope_Id, staples, true);
+                }
+
                 //Call the function to save all notes in a prop bag.
                 //This only works when the envelope has one signer and a TrueSignNoteId prop has been set.
                 SaveAnchorsToProp(app, args, doc.Id);
@@ -91,9 +102,9 @@
                     List<Signer> signers = new List<Signer>();
 
                     //Check if envelope has multiple or single signer
-                    if (args.SessionPropertyBag.TryGetValue("TrueSignSignerEmail", out singleEmail))
-                        signers.Add(GetSigner(app, args));
-                    else if (args.SessionPropertyBag.TryGetValue("TrueSignSignerEmail", out multipleEmails))
+                    //if (args.SessionPropertyBag.TryGetValue("TrueSignSignerEmail", out singleEmail))
+                    //    signers.Add(GetSigner(app, args));
+                    if (args.SessionPropertyBag.TryGetValue("TrueSignSignerEmail", out multipleEmails))
                         signers.AddRange(GetSigners(app, args));
                     else
                         app.Diagnostics.WriteIf(Diagnostics.DiagnosticsLevel.Info, "No property bag for signer email found...");
@@ -159,16 +170,15 @@
 
                     if (singleSigner)
                     {
-                        if (args.Document.Notes.Count > 0 && noteId > 0)
+                        if (args.Document.LatestRevision.Document.Notes.Count > 0 && noteId > 0)
                         {
                             string noteJson;
                             args.SessionPropertyBag.TryGetValue("TrueSignAnchors", out noteJson);
 
-                            List<Anchor> anchors = string.IsNullOrEmpty(noteJson) ? new List<Anchor>() : JsonConvert.DeserializeObject<List<Anchor>>(noteJson);
-
                             //Get all the document notes for the configured NoteTypeID. Make sure to only get notes of the latest revision
                             //and the notes that have Repeat On All Revisions set to True.
-                            foreach (var note in args.Document.Notes.FindAll(x => x.NoteType.ID == noteId && (x.DocumentRevision.ID == args.Document.LatestRevision.ID || x.NoteType.DisplaySettings == NoteTypeDisplaySettings.RepeatOnAllRevisions)))
+                            List<Anchor> anchors = string.IsNullOrEmpty(noteJson) ? new List<Anchor>() : JsonConvert.DeserializeObject<List<Anchor>>(noteJson);
+                            foreach (Note note in args.Document.Notes.FindAll(x => x.NoteType.ID == noteId && (x.DocumentRevision.ID == args.Document.LatestRevision.ID || x.NoteType.DisplaySettings == NoteTypeDisplaySettings.RepeatOnAllRevisions)))
                             {
                                 var anchor = new Anchor();
                                 anchor.Id = Guid.NewGuid();

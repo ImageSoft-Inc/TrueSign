@@ -86,7 +86,7 @@
                         else
                         {
                             //Download and create a new revision of the document
-                            var success = TrueSign.DownloadEnvelopeDocs(envelope, false);
+                            var success = TrueSign.DownloadEnvelopeDocs(envelope);
                             if (!success)
                                 throw new Exception("Unable to download envelope docs from the TrueSign API");
                         }
